@@ -17,7 +17,11 @@ Nesta fase do projeto, nosso objetivo é desenvolver um protótipo para medir pa
 
 Caso não tenha os componentes físicos em mãos, você pode simular o projeto no [site Wokwi](https://wokwi.com) para compreender e seguir o processo.
 
-A montagem deve ficar assim: ![MONTAGEM](https://cdn.discordapp.com/attachments/1075818265739280436/1164754095786164245/image.png?ex=65445cc8&is=6531e7c8&hm=3f408fff7c9e7aa4f614a1fb4f5926390f7f60ab462d97422fbabab5ea1b59a4&)
+A montagem deve ficar assim: 
+
+
+![image](https://github.com/guidxs/Checkpoint5-Edge/assets/126616600/e523c32c-19e9-4f61-8e44-041507800a19)
+
 
 ## Explorando os Componentes
 
