@@ -1,3 +1,6 @@
+## Integrante:
+- Guilherme Doretto Sobreiro RM: 99674
+
 # Guia para Acesso Remoto de Dados por WiFi
 
 Neste repositório, você encontrará um guia abrangente sobre como configurar e acessar dados de sensores de temperatura, umidade e luminosidade de forma remota, fazendo uso de um ESP32 e uma conexão WiFi. Este projeto é direcionado a entusiastas, estudantes e desenvolvedores que desejam coletar dados de sensores e acessá-los de qualquer lugar com acesso à Internet.
