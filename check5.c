@@ -9,22 +9,17 @@
 
 #include <WiFi.h>
 #include <PubSubClient.h> // Importa a Biblioteca PubSubClient
-
 #include "DHT.h"
-
-#define DHTPIN 4   
-#define DHTTYPE DHT11   // DHT 11
-#define DHTTYPE DHT22   // DHT 22
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
 //defines:
 //defines de id mqtt e tópicos para publicação e subscribe denominado TEF(Telemetria e Monitoramento de Equipamentos)
 #define TOPICO_SUBSCRIBE    "/TEF/lamp111/cmd"        //tópico MQTT de escuta
 #define TOPICO_PUBLISH      "/TEF/lamp111/attrs"      //tópico MQTT de envio de informações para Broker
 #define TOPICO_PUBLISH_2    "/TEF/lamp111/attrs/l"    //tópico MQTT de envio de informações para Broker
-#define TOPICO_PUBLISH_3    "/TEF/lamp111/attrs/u"
-#define TOPICO_PUBLISH_4    "/TEF/lamp111/attrs/t"
-
-
+#define TOPICO_PUBLISH_3    "/TEF/lamp111/attrs/h"    //tópico MQTT de envio de informações para Broker
+#define TOPICO_PUBLISH_4    "/TEF/lamp111/attrs/t"    //tópico MQTT de envio de informações para Broker
                                                       //IMPORTANTE: recomendamos fortemente alterar os nomes
                                                       //            desses tópicos. Caso contrário, há grandes
                                                       //            chances de você controlar e monitorar o ESP32
@@ -35,8 +30,14 @@
                                  //            id de outro já conectado ao broker, o broker 
                                  //            irá fechar a conexão de um deles).
                                  // o valor "n" precisa ser único!
-                                
+// DHT 11 (Sensor de umidade e temperatura)                                
+#define DHTTYPE DHT11   // DHT 11
+#define DHTPIN 4 
+DHT dht(DHTPIN, DHTTYPE);
 
+// Display LCD
+LiquidCrystal_I2C lcd(0x27,16,2);
+ 
 // WIFI
 const char* SSID = "FIAP-IBM"; // SSID / nome da rede WI-FI que deseja se conectar
 const char* PASSWORD = "Challenge@23!"; // Senha da rede WI-FI que deseja se conectar
@@ -46,14 +47,15 @@ const char* BROKER_MQTT = "46.17.108.113"; //URL do broker MQTT que se deseja ut
 int BROKER_PORT = 1883; // Porta do Broker MQTT
  
 int D4 = 2;
+int D25 = 25;
+int D26 = 26;
+int D27 = 27;
 
 //Variáveis e objetos globais
 WiFiClient espClient; // Cria o objeto espClient
 PubSubClient MQTT(espClient); // Instancia o Cliente MQTT passando o objeto espClient
 char EstadoSaida = '0';  //variável que armazena o estado atual da saída
-
-DHT dht(DHTPIN, DHTTYPE);
-
+  
 //Prototypes
 void initSerial();
 void initWiFi();
@@ -73,11 +75,11 @@ void setup()
     initSerial();
     initWiFi();
     initMQTT();
+    dht.begin();
+    lcd.init();
     delay(5000);
     MQTT.publish(TOPICO_PUBLISH, "s|off");
-
-    Serial.println(F("DHTxx test!"));
-    dht.begin();
+    lcd.backlight();
 }
   
 //Função: inicializa comunicação serial com baudrate 115200 (para fins de monitorar no terminal serial 
@@ -236,6 +238,13 @@ void EnviaEstadoOutputMQTT(void)
 //Retorno: nenhum
 void InitOutput(void)
 {
+    pinMode(D25, OUTPUT);
+    pinMode(D26, OUTPUT);
+    pinMode(D27, OUTPUT);
+    digitalWrite(D25, LOW);
+    digitalWrite(D26, LOW);
+    digitalWrite(D27, LOW);
+    
     //IMPORTANTE: o Led já contido na placa é acionado com lógica invertida (ou seja,
     //enviar HIGH para o output faz o Led apagar / enviar LOW faz o Led acender)
     pinMode(D4, OUTPUT);
@@ -247,10 +256,16 @@ void InitOutput(void)
     {
         toggle = !toggle;
         digitalWrite(D4,toggle);
+        digitalWrite(D25,toggle);
+        digitalWrite(D26,toggle);
+        digitalWrite(D27,toggle);
         delay(200);           
     }
 
     digitalWrite(D4, LOW);
+    digitalWrite(D25, LOW);
+    digitalWrite(D26, LOW);
+    digitalWrite(D27, LOW);
 }
  
  
@@ -268,54 +283,86 @@ void loop()
 
     //luminosidade
     int sensorValue = analogRead(potPin);   // Ler o pino Analógico onde está o LDR, lembrando que o divisor de tensão é Vin = Vout (R2/(R1 + R2))
-    float voltage = sensorValue * (3.3 / 4096.0);   // Converter a leitura analógica (que vai de 0 - 1023) para uma voltagem (0 - 3.3V), quanto de acordo com a intensidade de luz no LDR a voltagem diminui.
-    float luminosity = map(sensorValue, 0, 4095, 0, 100); // Normalizar o valor da luminosidade entre 0% e 100%
-    Serial.print("Voltagem: ");
+    float voltage = sensorValue * (3.3 / 4096.0);   // Converter a leitura analógica (que vai de 0 - 4095) para uma voltagem (0 - 3.3V), quanto de acordo com a intensidade de luz no LDR a voltagem diminui.
+    float luminosity = map(sensorValue, 2000, 4095, 0, 100); // Normalizar o valor da luminosidade entre 0% e 100%
+    Serial.print("Voltage: ");
     Serial.print(voltage);
     Serial.print("V - ");
     Serial.print("Luminosidade: ");
     Serial.print(luminosity);
     Serial.println("%");
+
+    //Publicação tópico MQTT Luminosidade
     dtostrf(luminosity, 4, 2, msgBuffer);
     MQTT.publish(TOPICO_PUBLISH_2,msgBuffer);
+
+    //Escrita no display do valor da Luminosidade
+    lcd.setCursor(0,0);
+    lcd.print("L:");
+    lcd.setCursor(2,0);
+    lcd.print(msgBuffer);
+    lcd.setCursor(6,0);
+    lcd.print("%");
+
+    // Controle dos Leds indicadores de luminosidade
+    if(luminosity >= 80)
+    {
+      digitalWrite(D25, LOW);
+      digitalWrite(D26, LOW);
+      digitalWrite(D27, HIGH);
+    }
+    else if(luminosity < 80 && luminosity > 60)
+    {
+      digitalWrite(D25, LOW);
+      digitalWrite(D26, HIGH);
+      digitalWrite(D27, LOW);
+    }
+    else if(luminosity <= 60)
+    {
+      digitalWrite(D25, HIGH);
+      digitalWrite(D26, LOW);
+      digitalWrite(D27, LOW);
+    }
+ 
+    // Leitura do sensor DHT11
+    float humidity = dht.readHumidity();
+    float temperature = dht.readTemperature();
+    // Check if any reads failed and exit early (to try again).
+    if (isnan(humidity) || isnan(temperature))
+    {
+      Serial.println(F("Falha leitura do sensor DHT-11!"));
+    }
+
+    Serial.print(F("Umidade: "));
+    Serial.print(humidity);
+    Serial.print(F("% Temperatura: "));
+    Serial.print(temperature);
+    Serial.println(F("°C "));
+    
+    //Publicação tópico MQTT Umidade
+    dtostrf(humidity, 4, 2, msgBuffer);
+    MQTT.publish(TOPICO_PUBLISH_3,msgBuffer);
+    
+    //Escrita no display do valor da Umidade
+    lcd.setCursor(7,0);
+    lcd.print(" U:");
+    lcd.setCursor(10,0);
+    lcd.print(msgBuffer);
+    lcd.setCursor(14,0);
+    lcd.print("% ");
+
+    //Publicação tópico MQTT Temperatura
+    dtostrf(temperature, 4, 2, msgBuffer);
+    MQTT.publish(TOPICO_PUBLISH_4,msgBuffer);
+    
+    //Escrita no display do valor da Temperatura
+    lcd.setCursor(0,1);
+    lcd.print("T:");
+    lcd.setCursor(2,1);
+    lcd.print(msgBuffer);
+    lcd.setCursor(5,1);
+    lcd.print("C           ");
     
     //keep-alive da comunicação com broker MQTT
     MQTT.loop();
-
-    //DHT11
-  
-    float h = dht.readHumidity();
-    dtostrf(h, 4, 2, msgBuffer);
-    MQTT.publish(TOPICO_PUBLISH_3,msgBuffer);
-    
-    float t = dht.readTemperature();
-    float f = dht.readTemperature(true);
-    MQTT.publish(TOPICO_PUBLISH_4,msgBuffer);
-
-  
-
-    // Check if any reads failed and exit early (to try again).
-    if (isnan(h) || isnan(t) || isnan(f)) {
-      Serial.println(F("Failed to read from DHT sensor!"));
-      return;
-    }
-
-  
-    // Compute heat index in Fahrenheit (the default)
-    float hif = dht.computeHeatIndex(f, h);
-    // Compute heat index in Celsius (isFahreheit = false)
-    float hic = dht.computeHeatIndex(t, h, false);
-
-
-    Serial.print(F("Umidade: "));
-    Serial.print(h);
-    Serial.print(F("% | Temperatura: "));
-    Serial.print(t);
-    Serial.print(F("°C "));
-    Serial.print(f);
-    Serial.print(F("°F | Índice de Calor: "));
-    Serial.print(hic);
-    Serial.print(F("°C "));
-    Serial.print(hif);
-    Serial.println(F("°F"));
 }
